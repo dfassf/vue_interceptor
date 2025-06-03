@@ -1,0 +1,4 @@
+
+### connection test
+GET http://localhost:3000/connection-test/common
+Authorization: Bearer testestest
