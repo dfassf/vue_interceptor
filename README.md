@@ -54,7 +54,7 @@ VITE_SERVER_URL=http://localhost:3000
 
 여기서 `http://localhost:3000`은 백엔드 서버의 URL입니다. 필요에 따라 변경할 수 있습니다.
 
-## Axios 인터셉터
+## Fetch 인터셉터
 
 프론트엔드에서는 Fetch함수를 사용한 인터셉터를 사용하여 요청과 응답을 처리합니다. `fe/src/interceptor.js` 파일에서 인터셉터의 로직을 확인할 수 있습니다. 이 인터셉터는 다음과 같은 기능을 제공합니다:
 
@@ -67,7 +67,3 @@ VITE_SERVER_URL=http://localhost:3000
 ### 테스트
 
 프론트엔드의 각 버튼은 로컬 스토리지에 액세스 토큰 저장, 일반 요청 처리, 401오류 시, 그 외의 오류 응답 반환의 기능을 합니다.
-
-## 배포
-
-프로젝트를 배포할 준비가 되면, NestJS의 [배포 문서](https://docs.nestjs.com/deployment)를 참조하여 최적화된 배포 방법을 확인하세요.
