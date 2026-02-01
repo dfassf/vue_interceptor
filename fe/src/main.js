@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import './style.css'
 import App from './App.vue'
-import interceptor from './interceptor'
+import interceptor from './interceptor.ts'
 
 
 const app = createApp(App);
