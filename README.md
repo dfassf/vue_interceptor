@@ -25,13 +25,76 @@ vue_interceptor/
 │   │   ├── main.js        # Vue 앱 진입점
 │   │   └── __tests__/     # 테스트 코드
 │   ├── package.json
+│   ├── Dockerfile         # 프론트엔드 Docker 이미지
 │   └── vitest.config.ts   # Vitest 설정
-└── be/                    # 백엔드 (NestJS) - 프론트엔드 테스트용 목업 서버
-    ├── src/
-    │   ├── app.controller.ts
-    │   ├── app.service.ts
-    │   └── connection-test/  # 인터셉터 테스트용 엔드포인트
-    └── test/                # E2E 테스트
+├── be/                    # 백엔드 (NestJS) - 프론트엔드 테스트용 목업 서버
+│   ├── src/
+│   │   ├── app.controller.ts
+│   │   ├── app.service.ts
+│   │   └── connection-test/  # 인터셉터 테스트용 엔드포인트
+│   ├── test/              # E2E 테스트
+│   ├── Dockerfile         # 백엔드 Docker 이미지
+│   └── package.json
+├── .github/
+│   └── workflows/         # CI/CD 파이프라인
+│       ├── ci.yml         # 지속적 통합
+│       └── cd.yml         # 지속적 배포
+├── docker-compose.yml     # 전체 시스템 실행용
+└── README.md
+```
+
+## 시스템 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Frontend (Vue 3)                        │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              Fetch Interceptor                        │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  • 자동 토큰 헤더 추가                          │  │  │
+│  │  │  • 401 응답 감지                                │  │  │
+│  │  │  • 토큰 갱신 및 재요청                          │  │  │
+│  │  │  • 요청 큐 관리                                 │  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                          │                                    │
+│                          │ HTTP Request                      │
+│                          │ (with Authorization Header)        │
+│                          ▼                                    │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          │
+┌─────────────────────────────────────────────────────────────┐
+│                  Backend (NestJS - Mock)                     │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │         Connection Test Controller                     │  │
+│  │  ┌──────────────────┐  ┌──────────────────────────┐  │  │
+│  │  │ GET /common     │  │ GET /unauthorized (401)   │  │  │
+│  │  │ POST /common    │  │ GET /error (500)          │  │  │
+│  │  └──────────────────┘  └──────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                          │                                    │
+│                          │ HTTP Response                      │
+│                          │ (200/401/500)                      │
+│                          ▼                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 인터셉터 동작 흐름
+
+```
+1. 사용자 요청
+   └─> Interceptor가 토큰을 헤더에 자동 추가
+       └─> Backend로 요청 전송
+
+2. Backend 응답
+   ├─> 200 OK: 정상 처리, 응답 반환
+   ├─> 401 Unauthorized: 
+   │   ├─> Interceptor가 토큰 갱신 시도
+   │   ├─> 갱신 중 추가 요청은 큐에 저장
+   │   ├─> 토큰 갱신 완료 후 큐의 요청들 재시도
+   │   └─> 원래 요청 재시도
+   └─> 기타 에러: 에러 반환
 ```
 
 ## 프로젝트 설정
@@ -107,6 +170,76 @@ npm run test:cov
 npm run test:e2e
 ```
 
+## Docker를 사용한 배포
+
+### Docker Compose로 전체 시스템 실행
+
+가장 간단한 방법은 Docker Compose를 사용하는 것입니다:
+
+```bash
+# 전체 시스템 실행 (프론트엔드 + 백엔드)
+docker-compose up -d
+
+# 로그 확인
+docker-compose logs -f
+
+# 시스템 중지
+docker-compose down
+```
+
+실행 후:
+- 프론트엔드: http://localhost
+- 백엔드: http://localhost:3000
+
+### 개별 Docker 이미지 빌드
+
+#### 백엔드
+
+```bash
+cd be
+
+# 이미지 빌드
+docker build -t vue-interceptor-backend .
+
+# 컨테이너 실행
+docker run -p 3000:3000 vue-interceptor-backend
+```
+
+#### 프론트엔드
+
+```bash
+cd fe
+
+# 이미지 빌드
+docker build -t vue-interceptor-frontend .
+
+# 컨테이너 실행
+docker run -p 80:80 vue-interceptor-frontend
+```
+
+## CI/CD
+
+이 프로젝트는 GitHub Actions를 사용한 CI/CD 파이프라인을 포함합니다.
+
+### CI (지속적 통합)
+
+`.github/workflows/ci.yml` 파일이 다음을 자동으로 실행합니다:
+
+- **백엔드 테스트**: 단위 테스트, E2E 테스트, 코드 커버리지
+- **프론트엔드 테스트**: Vitest 테스트 실행
+- **Docker 빌드 검증**: 이미지 빌드 성공 여부 확인
+
+### CD (지속적 배포)
+
+`.github/workflows/cd.yml` 파일이 main 브랜치에 푸시될 때:
+
+- Docker 이미지 빌드 및 Docker Hub에 푸시
+- 배포 알림 전송
+
+### CI/CD 실행 확인
+
+GitHub 레포지토리의 Actions 탭에서 CI/CD 파이프라인 실행 상태를 확인할 수 있습니다.
+
 ## 환경 변수 설정
 
 이 프로젝트는 환경 변수를 사용하여 서버 URL을 설정합니다. `.env` 파일을 프로젝트 루트에 생성하고 다음과 같이 설정합니다.
@@ -116,6 +249,10 @@ VITE_SERVER_URL=http://localhost:3000
 ```
 
 여기서 `http://localhost:3000`은 백엔드 서버의 URL입니다. 필요에 따라 변경할 수 있습니다.
+
+### Docker 환경에서의 환경 변수
+
+Docker Compose를 사용할 때는 `docker-compose.yml` 파일에서 환경 변수를 설정할 수 있습니다.
 
 ## Fetch 인터셉터
 
